@@ -20,6 +20,20 @@ export default function Home({ results }) {
 }
 
 export async function getServerSideProps(context) {
+    const searchTerm = context.query.search;
+
+    if (searchTerm) {
+        const request = await fetch(
+            `https://api.themoviedb.org/3/search/movie?api_key=${process.env.API_KEY}&query=${encodeURIComponent(searchTerm)}&language=en-US`
+        ).then(res => res.json());
+
+        return {
+            props: {
+                results: request.results || []
+            }
+        }
+    }
+
     const genre = context.query.genre;
 
     const request = await fetch(
