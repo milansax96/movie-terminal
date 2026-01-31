@@ -2,6 +2,9 @@
   "name": "hulu-clone",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +13,9 @@
   },
   "dependencies": {
     "@heroicons/react": "1.0.6",
+    "lucide-react": "^0.563.0",
     "next": "13.4.10",
+    "next-auth": "^4.24.13",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-flip-move": "^3.0.5",
