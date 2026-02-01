@@ -1,7 +1,8 @@
 import { useSession, signOut, getSession } from 'next-auth/react'
 import Header from '../components/Header'
 import Image from 'next/image'
-import { LogOut } from 'lucide-react'
+import { LogOut, Bookmark } from 'lucide-react'
+import Link from 'next/link'
 
 export default function Account() {
     const { data: session } = useSession()
@@ -24,6 +25,12 @@ export default function Account() {
                     )}
                     <h1 className="text-xl font-bold text-white">{session.user?.name}</h1>
                     <p className="text-gray-500 text-sm mt-1">{session.user?.email}</p>
+
+                    <Link href="/mymovies" className="mt-6 w-full flex items-center justify-center gap-2 bg-[#e50914] text-white
+                        font-semibold py-3 rounded-lg hover:bg-[#c4070f] transition cursor-pointer">
+                        <Bookmark className="h-4 w-4" />
+                        My Movies
+                    </Link>
 
                     <button
                         onClick={() => signOut({ callbackUrl: '/auth' })}
