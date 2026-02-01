@@ -4,7 +4,9 @@ import Header from "../components/Header";
 import {Spotify} from 'react-spotify-embed';
 import songRequests from "../utils/songRequests";
 import Image from "next/image";
-import {Play, Music} from 'lucide-react';
+import {Play, Music, Heart} from 'lucide-react';
+import { getToken } from 'next-auth/jwt';
+import supabase from '../utils/supabase';
 
 function scoreSoundtrackCandidate(candidate, movieTitle, movieYear) {
     const name = candidate.name.toLowerCase();
@@ -29,11 +31,28 @@ function scoreSoundtrackCandidate(candidate, movieTitle, movieYear) {
     return score;
 }
 
-export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, providers }) {
+export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, providers, isSaved, mediaType }) {
     const BASE_URL = 'https://image.tmdb.org/t/p/original'
     const [trailerVideo, setTrailerVideo] = useState(null);
+    const [saved, setSaved] = useState(isSaved || false);
     const title = movieDetails.title || movieDetails.name;
     const releaseDate = movieDetails.release_date || movieDetails.first_air_date;
+
+    const toggleSave = async () => {
+        const method = saved ? 'DELETE' : 'POST'
+        const res = await fetch('/api/movies/save', {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                movie_id: movieDetails.id,
+                title: title,
+                poster_path: movieDetails.poster_path,
+                backdrop_path: movieDetails.backdrop_path,
+                media_type: mediaType
+            })
+        })
+        if (res.ok) setSaved(!saved)
+    }
 
     const findTrailerVideo = () => {
         if (videoResults.results?.length > 0) {
@@ -77,6 +96,16 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
                                     : null
                             }
                         </p>
+                        {isSaved !== null && (
+                            <button
+                                onClick={toggleSave}
+                                className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1e1e1e] border border-gray-700 hover:border-[#e50914] transition cursor-pointer group">
+                                <Heart className={`h-4 w-4 ${saved ? 'text-[#e50914]' : 'text-gray-400 group-hover:text-[#e50914]'}`} fill={saved ? 'currentColor' : 'none'} />
+                                <span className={`text-sm ${saved ? 'text-[#e50914]' : 'text-gray-400 group-hover:text-white'}`}>
+                                    {saved ? 'Saved' : 'My Movies'}
+                                </span>
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -199,6 +228,7 @@ export async function getServerSideProps(context) {
     const media_type = context.query['media_type'];
     const API_KEY = process.env.API_KEY;
     const type = media_type === 'tv' ? 'tv' : 'movie';
+    const token = await getToken({ req: context.req });
 
     // Step 1: Spotify token (serial — prerequisite for the search call)
     const tokenRequest = await fetch(
@@ -211,7 +241,7 @@ export async function getServerSideProps(context) {
     ).then(res => res.json());
 
     // Step 2: All remaining fetches in parallel
-    const [detailsResponse, videosResponse, songResponse, creditsResponse, providersResponse] = await Promise.all([
+    const [detailsResponse, videosResponse, songResponse, creditsResponse, providersResponse, savedRow] = await Promise.all([
         fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=${API_KEY}&language=en-US`).then(res => res.json()),
         fetch(`https://api.themoviedb.org/3/${type}/${id}/videos?api_key=${API_KEY}`).then(res => res.json()),
         fetch(
@@ -220,6 +250,9 @@ export async function getServerSideProps(context) {
         ).then(res => res.json()),
         fetch(`https://api.themoviedb.org/3/${type}/${id}/credits?api_key=${API_KEY}`).then(res => res.json()),
         fetch(`https://api.themoviedb.org/3/${type}/${id}/watch/providers?api_key=${API_KEY}`).then(res => res.json()),
+        token
+            ? supabase.from('saved_movies').select('id').eq('user_email', token.email).eq('movie_id', parseInt(id)).single()
+            : Promise.resolve({ data: null }),
     ]);
 
     // Step 3: Score soundtrack candidates server-side
@@ -248,7 +281,9 @@ export async function getServerSideProps(context) {
             soundtrackUrl: soundtrackUrl,
             cast: creditsResponse.cast?.slice(0, 6) || [],
             providers: providersResponse.results?.US || null,
-            posterPath: poster_path
+            posterPath: poster_path,
+            isSaved: token ? !!savedRow.data : null,
+            mediaType: type
         }
     }
 }

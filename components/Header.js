@@ -1,5 +1,5 @@
 import HeaderItem from "./HeaderItem";
-import {Home, Search, User} from 'lucide-react'
+import {Home, Search, User, Bookmark} from 'lucide-react'
 import {useRouter} from 'next/router'
 import {useState} from 'react'
 import { useSession } from 'next-auth/react'
@@ -18,6 +18,7 @@ function Header() {
             <div className='flex gap-1 mt-3 sm:mt-0'>
                 <HeaderItem title="HOME" Icon={Home}/>
                 <HeaderItem title="SEARCH" Icon={Search} onClick={() => setSearchOpen(!searchOpen)}/>
+                {session && <HeaderItem title="MY LIST" Icon={Bookmark} route="/mymovies"/>}
                 {session ? (
                     <div
                         onClick={() => router.push('/account')}
