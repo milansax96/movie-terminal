@@ -2,41 +2,29 @@ import {useState, useEffect} from 'react';
 import ReactPlayer from 'react-player';
 import Header from "../components/Header";
 import {Spotify} from 'react-spotify-embed';
-import songRequests from "../utils/songRequests";
 import Image from "next/image";
 import {Play, Music, Heart} from 'lucide-react';
-import { getToken } from 'next-auth/jwt';
-import supabase from '../utils/supabase';
+import CastSkeleton from '../components/skeletons/CastSkeleton';
+import TrailerSkeleton from '../components/skeletons/TrailerSkeleton';
+import ProvidersSkeleton from '../components/skeletons/ProvidersSkeleton';
 
-function scoreSoundtrackCandidate(candidate, movieTitle, movieYear) {
-    const name = candidate.name.toLowerCase();
-    const title = movieTitle.toLowerCase();
-
-    if (!name.includes(title)) return -Infinity;
-
-    let score = 0;
-
-    if (name.includes('soundtrack'))     score += 100;
-    if (name.includes('motion picture')) score += 90;
-    if (name.includes('original score')) score += 80;
-
-    if (candidate.release_date && movieYear) {
-        const albumYear = parseInt(candidate.release_date.substring(0, 4), 10);
-        const diff = Math.abs(albumYear - parseInt(movieYear, 10));
-        if (diff === 0)    score += 50;
-        else if (diff === 1) score += 30;
-        else if (diff <= 3)  score += 10;
-    }
-
-    return score;
-}
-
-export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, providers, isSaved, mediaType }) {
+export default function Film({ movieDetails, movieName, mediaType }) {
     const BASE_URL = 'https://image.tmdb.org/t/p/original'
-    const [trailerVideo, setTrailerVideo] = useState(null);
-    const [saved, setSaved] = useState(isSaved || false);
     const title = movieDetails.title || movieDetails.name;
     const releaseDate = movieDetails.release_date || movieDetails.first_air_date;
+
+    // State for lazy-loaded data
+    const [trailerVideo, setTrailerVideo] = useState(null);
+    const [cast, setCast] = useState([]);
+    const [providers, setProviders] = useState(null);
+    const [soundtrackUrl, setSoundtrackUrl] = useState(null);
+    const [saved, setSaved] = useState(null);
+
+    // Loading states
+    const [loadingVideos, setLoadingVideos] = useState(true);
+    const [loadingCast, setLoadingCast] = useState(true);
+    const [loadingProviders, setLoadingProviders] = useState(true);
+    const [loadingSoundtrack, setLoadingSoundtrack] = useState(true);
 
     const toggleSave = async () => {
         const method = saved ? 'DELETE' : 'POST'
@@ -54,7 +42,7 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
         if (res.ok) setSaved(!saved)
     }
 
-    const findTrailerVideo = () => {
+    const findTrailerVideo = (videoResults) => {
         if (videoResults.results?.length > 0) {
             const trailers = videoResults.results.filter(
                 entry => entry.name.toLowerCase().includes('trailer')
@@ -64,9 +52,45 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
         return null;
     }
 
+    // Fetch deferred data after mount (Phase 3: Client-side lazy loading)
     useEffect(() => {
-        setTrailerVideo(findTrailerVideo());
-    }, [])
+        const movieId = movieDetails.id;
+
+        // Fetch all deferred data in parallel
+        Promise.all([
+            fetch(`/api/movies/${movieId}/videos?media_type=${mediaType}`).then(r => r.json()),
+            fetch(`/api/movies/${movieId}/credits?media_type=${mediaType}`).then(r => r.json()),
+            fetch(`/api/movies/${movieId}/providers?media_type=${mediaType}`).then(r => r.json()),
+            fetch(`/api/movies/${movieId}/soundtrack?name=${encodeURIComponent(movieName)}&media_type=${mediaType}`).then(r => r.json()),
+            fetch(`/api/movies/${movieId}/saved`).then(r => r.json())
+        ]).then(([videosData, creditsData, providersData, soundtrackData, savedData]) => {
+            // Process videos
+            setTrailerVideo(findTrailerVideo(videosData));
+            setLoadingVideos(false);
+
+            // Process cast
+            setCast(creditsData.cast?.slice(0, 6) || []);
+            setLoadingCast(false);
+
+            // Process providers
+            setProviders(providersData.results?.US || null);
+            setLoadingProviders(false);
+
+            // Process soundtrack
+            setSoundtrackUrl(soundtrackData.url || null);
+            setLoadingSoundtrack(false);
+
+            // Process saved status
+            setSaved(savedData.saved);
+        }).catch(error => {
+            console.error('Error loading deferred data:', error);
+            // Mark all as loaded even on error to hide skeletons
+            setLoadingVideos(false);
+            setLoadingCast(false);
+            setLoadingProviders(false);
+            setLoadingSoundtrack(false);
+        });
+    }, [movieDetails.id, mediaType, movieName])
 
     return (
         <div>
@@ -76,8 +100,8 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
             {movieDetails.backdrop_path && (
                 <div className="relative w-full h-64 sm:h-96">
                     <Image
-                        layout="fill"
-                        objectFit="cover"
+                        fill
+                        className="object-cover"
                         src={`${BASE_URL}${movieDetails.backdrop_path}`}
                         alt={title}
                     />
@@ -96,7 +120,7 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
                                     : null
                             }
                         </p>
-                        {isSaved !== null && (
+                        {saved !== null && (
                             <button
                                 onClick={toggleSave}
                                 className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1e1e1e] border border-gray-700 hover:border-[#e50914] transition cursor-pointer group">
@@ -140,20 +164,15 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
                         ))}
                     </div>
                     <p className="text-gray-400 leading-relaxed">{movieDetails.overview}</p>
-                    {soundtrackUrl && (
-                        <div className="mt-5">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Music className="h-4 w-4 text-[#1db954]" fill="currentColor" />
-                                <span className="text-white text-xs font-semibold tracking-widest uppercase">Soundtrack</span>
-                            </div>
-                            <Spotify link={soundtrackUrl} />
-                        </div>
-                    )}
                 </div>
             </div>
 
-            {/* Cast Row */}
-            {cast.length > 0 && (
+            {/* Cast Row - Lazy Loaded */}
+            {loadingCast ? (
+                <div className="px-6">
+                    <CastSkeleton />
+                </div>
+            ) : cast.length > 0 ? (
                 <div className="px-6 mt-6">
                     <h3 className="text-white text-lg font-semibold mb-3">Cast</h3>
                     <div className="flex gap-4 overflow-x-auto scrollbar-hide">
@@ -176,10 +195,14 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
                         ))}
                     </div>
                 </div>
-            )}
+            ) : null}
 
-            {/* Streaming Providers */}
-            {providers && (providers.flatrate || providers.rent || providers.buy) && (
+            {/* Streaming Providers - Lazy Loaded */}
+            {loadingProviders ? (
+                <div className="px-6">
+                    <ProvidersSkeleton />
+                </div>
+            ) : providers && (providers.flatrate || providers.rent || providers.buy) ? (
                 <div className="px-6 mt-6">
                     <h3 className="text-white text-lg font-semibold mb-3">Watch</h3>
                     <div className="flex flex-wrap gap-3">
@@ -200,10 +223,25 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
                         }
                     </div>
                 </div>
-            )}
+            ) : null}
 
-            {/* Trailer */}
-            {trailerVideo && (
+            {/* Soundtrack - Lazy Loaded */}
+            {loadingSoundtrack ? null : soundtrackUrl ? (
+                <div className="px-6 mt-6">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Music className="h-4 w-4 text-[#1db954]" fill="currentColor" />
+                        <span className="text-white text-xs font-semibold tracking-widest uppercase">Soundtrack</span>
+                    </div>
+                    <Spotify link={soundtrackUrl} />
+                </div>
+            ) : null}
+
+            {/* Trailer - Lazy Loaded */}
+            {loadingVideos ? (
+                <div className="px-6">
+                    <TrailerSkeleton />
+                </div>
+            ) : trailerVideo ? (
                 <div className="px-6 mt-10 pb-10">
                     <div className="bg-[#1e1e1e] rounded-xl overflow-hidden border-t-2 border-[#e50914]">
                         <div className="flex items-center gap-2 px-4 py-3">
@@ -215,76 +253,60 @@ export default function Film({ videoResults, movieDetails, soundtrackUrl, cast, 
                         </div>
                     </div>
                 </div>
-            )}
+            ) : null}
 
         </div>
     );
 }
 
 export async function getServerSideProps(context) {
+    const { getCachedMovieData, cacheMovieData } = require('../utils/cache');
+
     const id = context.query['id'];
     const name = context.query['name'];
-    const poster_path = context.query['poster_path'];
     const media_type = context.query['media_type'];
     const API_KEY = process.env.API_KEY;
     const type = media_type === 'tv' ? 'tv' : 'movie';
-    const token = await getToken({ req: context.req });
 
-    // Step 1: Spotify token (serial — prerequisite for the search call)
-    const tokenRequest = await fetch(
-        'https://accounts.spotify.com/api/token',
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `grant_type=client_credentials&client_id=${songRequests['fetchSoundtrack'].clientID}&client_secret=${songRequests['fetchSoundtrack'].clientSecret}`
+    try {
+        // Phase 2: Only fetch CRITICAL data server-side with caching
+        // Check cache first (24 hour TTL)
+        let movieDetails;
+        const cached = await getCachedMovieData(id, type, 24);
+
+        if (cached && cached.details) {
+            // Cache HIT - use cached data
+            console.log(`[SSR] Movie ${id} details - Cache HIT`);
+            movieDetails = cached.details;
+        } else {
+            // Cache MISS - fetch from TMDB
+            console.log(`[SSR] Movie ${id} details - Cache MISS, fetching from TMDB`);
+            const response = await fetch(
+                `https://api.themoviedb.org/3/${type}/${id}?api_key=${API_KEY}&language=en-US`
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch movie details');
+            }
+
+            movieDetails = await response.json();
+
+            // Cache the details (fire-and-forget to not block response)
+            cacheMovieData(id, type, { details: movieDetails }).catch(console.error);
         }
-    ).then(res => res.json());
 
-    // Step 2: All remaining fetches in parallel
-    const [detailsResponse, videosResponse, songResponse, creditsResponse, providersResponse, savedRow] = await Promise.all([
-        fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=${API_KEY}&language=en-US`).then(res => res.json()),
-        fetch(`https://api.themoviedb.org/3/${type}/${id}/videos?api_key=${API_KEY}`).then(res => res.json()),
-        fetch(
-            `https://api.spotify.com/v1/search?q=${encodeURIComponent(name + ' soundtrack')}&type=album,playlist&limit=20`,
-            { headers: { 'Authorization': 'Bearer ' + tokenRequest.access_token } }
-        ).then(res => res.json()),
-        fetch(`https://api.themoviedb.org/3/${type}/${id}/credits?api_key=${API_KEY}`).then(res => res.json()),
-        fetch(`https://api.themoviedb.org/3/${type}/${id}/watch/providers?api_key=${API_KEY}`).then(res => res.json()),
-        token
-            ? supabase.from('saved_movies').select('id').eq('user_email', token.email).eq('movie_id', parseInt(id)).single()
-            : Promise.resolve({ data: null }),
-    ]);
-
-    // Step 3: Score soundtrack candidates server-side
-    const detailsReleaseDate = detailsResponse.release_date || detailsResponse.first_air_date;
-    const movieYear = detailsReleaseDate ? detailsReleaseDate.substring(0, 4) : null;
-    const candidates = [
-        ...(songResponse.albums?.items || []),
-        ...(songResponse.playlists?.items || [])
-    ].filter(Boolean);
-
-    let soundtrackUrl = null;
-    let bestScore = -Infinity;
-    for (const candidate of candidates) {
-        const score = scoreSoundtrackCandidate(candidate, name, movieYear);
-        if (score > bestScore) {
-            bestScore = score;
-            soundtrackUrl = candidate.external_urls?.spotify || null;
-        }
-    }
-    if (bestScore === -Infinity) soundtrackUrl = null;
-
-    return {
-        props: {
-            videoResults: videosResponse,
-            movieDetails: detailsResponse,
-            soundtrackUrl: soundtrackUrl,
-            cast: creditsResponse.cast?.slice(0, 6) || [],
-            providers: providersResponse.results?.US || null,
-            posterPath: poster_path,
-            isSaved: token ? !!savedRow.data : null,
-            mediaType: type
-        }
+        return {
+            props: {
+                movieDetails: movieDetails,
+                movieName: name,
+                mediaType: type
+            }
+        };
+    } catch (error) {
+        console.error('[SSR] Error in getServerSideProps:', error);
+        return {
+            notFound: true
+        };
     }
 }
 

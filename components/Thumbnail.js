@@ -40,8 +40,8 @@ const Thumbnail = forwardRef(({ result }, ref) => {
             rounded-lg overflow-hidden border border-transparent hover:border-[#e50914] hover:shadow-lg hover:shadow-[#e50914]/20'>
             <div className="relative aspect-video">
                 <Image
-                    layout='fill'
-                    objectFit='cover'
+                    fill
+                    className="object-cover"
                     src={`${BASE_URL}${result.backdrop_path || result.poster_path}` || `${BASE_URL}${result.poster_path}`}
                     alt='/image'
                 />
