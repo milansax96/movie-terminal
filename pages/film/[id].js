@@ -1,11 +1,11 @@
 import {useState, useEffect} from 'react';
 import ReactPlayer from 'react-player';
-import Header from "../components/Header";
+import Header from "../../components/Header";
 import {Spotify} from 'react-spotify-embed';
 import Image from "next/image";
 import {Music, Heart} from 'lucide-react';
-import CastSkeleton from '../components/skeletons/CastSkeleton';
-import ProvidersSkeleton from '../components/skeletons/ProvidersSkeleton';
+import CastSkeleton from '../../components/skeletons/CastSkeleton';
+import ProvidersSkeleton from '../../components/skeletons/ProvidersSkeleton';
 
 export default function Film({ movieDetails, movieName, mediaType }) {
     const BASE_URL = 'https://image.tmdb.org/t/p/original'
@@ -289,11 +289,10 @@ export default function Film({ movieDetails, movieName, mediaType }) {
 }
 
 export async function getServerSideProps(context) {
-    const { getCachedMovieData, cacheMovieData } = require('../utils/cache');
+    const { getCachedMovieData, cacheMovieData } = require('../../utils/cache');
 
-    const id = context.query['id'];
-    const name = context.query['name'];
-    const media_type = context.query['media_type'];
+    const id = context.params.id; // Get ID from URL path
+    const media_type = context.query.media_type || 'movie'; // Default to 'movie' if not provided
     const API_KEY = process.env.API_KEY;
     const type = media_type === 'tv' ? 'tv' : 'movie';
 
@@ -324,10 +323,13 @@ export async function getServerSideProps(context) {
             cacheMovieData(id, type, { details: movieDetails }).catch(console.error);
         }
 
+        // Use movie title from details if name not provided in query
+        const movieName = context.query.name || movieDetails.title || movieDetails.name;
+
         return {
             props: {
                 movieDetails: movieDetails,
-                movieName: name,
+                movieName: movieName,
                 mediaType: type
             }
         };
