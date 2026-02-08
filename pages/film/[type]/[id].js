@@ -1,11 +1,11 @@
 import {useState, useEffect} from 'react';
 import ReactPlayer from 'react-player';
-import Header from "../../components/Header";
+import Header from "../../../components/Header";
 import {Spotify} from 'react-spotify-embed';
 import Image from "next/image";
 import {Music, Heart} from 'lucide-react';
-import CastSkeleton from '../../components/skeletons/CastSkeleton';
-import ProvidersSkeleton from '../../components/skeletons/ProvidersSkeleton';
+import CastSkeleton from '../../../components/skeletons/CastSkeleton';
+import ProvidersSkeleton from '../../../components/skeletons/ProvidersSkeleton';
 
 export default function Film({ movieDetails, movieName, mediaType }) {
     const BASE_URL = 'https://image.tmdb.org/t/p/original'
@@ -289,12 +289,18 @@ export default function Film({ movieDetails, movieName, mediaType }) {
 }
 
 export async function getServerSideProps(context) {
-    const { getCachedMovieData, cacheMovieData } = require('../../utils/cache');
+    const { getCachedMovieData, cacheMovieData } = require('../../../utils/cache');
 
     const id = context.params.id; // Get ID from URL path
-    const media_type = context.query.media_type || 'movie'; // Default to 'movie' if not provided
+    const type = context.params.type; // Get type from URL path (movie or tv)
     const API_KEY = process.env.API_KEY;
-    const type = media_type === 'tv' ? 'tv' : 'movie';
+
+    // Validate type parameter
+    if (type !== 'movie' && type !== 'tv') {
+        return {
+            notFound: true
+        };
+    }
 
     try {
         // Phase 2: Only fetch CRITICAL data server-side with caching
@@ -304,17 +310,17 @@ export async function getServerSideProps(context) {
 
         if (cached && cached.details) {
             // Cache HIT - use cached data
-            console.log(`[SSR] Movie ${id} details - Cache HIT`);
+            console.log(`[SSR] ${type} ${id} details - Cache HIT`);
             movieDetails = cached.details;
         } else {
             // Cache MISS - fetch from TMDB
-            console.log(`[SSR] Movie ${id} details - Cache MISS, fetching from TMDB`);
+            console.log(`[SSR] ${type} ${id} details - Cache MISS, fetching from TMDB`);
             const response = await fetch(
                 `https://api.themoviedb.org/3/${type}/${id}?api_key=${API_KEY}&language=en-US`
             );
 
             if (!response.ok) {
-                throw new Error('Failed to fetch movie details');
+                throw new Error(`Failed to fetch ${type} details`);
             }
 
             movieDetails = await response.json();
@@ -323,7 +329,7 @@ export async function getServerSideProps(context) {
             cacheMovieData(id, type, { details: movieDetails }).catch(console.error);
         }
 
-        // Use movie title from details if name not provided in query
+        // Use movie/show title from details if name not provided in query
         const movieName = context.query.name || movieDetails.title || movieDetails.name;
 
         return {
@@ -340,4 +346,3 @@ export async function getServerSideProps(context) {
         };
     }
 }
-
