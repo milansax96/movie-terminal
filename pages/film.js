@@ -3,9 +3,8 @@ import ReactPlayer from 'react-player';
 import Header from "../components/Header";
 import {Spotify} from 'react-spotify-embed';
 import Image from "next/image";
-import {Play, Music, Heart} from 'lucide-react';
+import {Music, Heart} from 'lucide-react';
 import CastSkeleton from '../components/skeletons/CastSkeleton';
-import TrailerSkeleton from '../components/skeletons/TrailerSkeleton';
 import ProvidersSkeleton from '../components/skeletons/ProvidersSkeleton';
 
 export default function Film({ movieDetails, movieName, mediaType }) {
@@ -96,43 +95,92 @@ export default function Film({ movieDetails, movieName, mediaType }) {
         <div>
             <Header />
 
-            {/* Hero Banner */}
-            {movieDetails.backdrop_path && (
-                <div className="relative w-full h-64 sm:h-96">
-                    <Image
-                        fill
-                        className="object-cover"
-                        src={`${BASE_URL}${movieDetails.backdrop_path}`}
-                        alt={title}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#111111]" />
-                    <div className="absolute bottom-4 left-6 z-10">
-                        <h1 className="text-4xl sm:text-5xl font-bold text-white">{title}</h1>
-                        {movieDetails.tagline && (
-                            <p className="text-gray-400 italic mt-1">{movieDetails.tagline}</p>
-                        )}
-                        <p className="text-gray-500 text-sm mt-1">
-                            {releaseDate?.substring(0, 4)}
-                            {movieDetails.runtime
-                                ? ` · ${movieDetails.runtime} min`
-                                : movieDetails.episode_run_time?.[0]
-                                    ? ` · ${movieDetails.episode_run_time[0]} min/ep`
-                                    : null
-                            }
-                        </p>
-                        {saved !== null && (
-                            <button
-                                onClick={toggleSave}
-                                className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1e1e1e] border border-gray-700 hover:border-[#e50914] transition cursor-pointer group">
-                                <Heart className={`h-4 w-4 ${saved ? 'text-[#e50914]' : 'text-gray-400 group-hover:text-[#e50914]'}`} fill={saved ? 'currentColor' : 'none'} />
-                                <span className={`text-sm ${saved ? 'text-[#e50914]' : 'text-gray-400 group-hover:text-white'}`}>
-                                    {saved ? 'Saved' : 'My Movies'}
-                                </span>
-                            </button>
-                        )}
+            <style jsx>{`
+                @keyframes fadeIn {
+                    from {
+                        opacity: 0;
+                    }
+                    to {
+                        opacity: 1;
+                    }
+                }
+
+                .animate-fadeIn {
+                    animation: fadeIn 1s ease-in;
+                }
+            `}</style>
+
+            {/* Hero Banner - Backdrop image that fades to trailer */}
+            <div className="relative w-full h-[50vh] sm:h-[60vh] md:h-[70vh] overflow-hidden">
+                {/* Backdrop Image - Always visible initially, fades out when trailer loads */}
+                {movieDetails.backdrop_path && (
+                    <div
+                        className={`absolute inset-0 transition-opacity duration-1000 ${
+                            trailerVideo && !loadingVideos ? 'opacity-0' : 'opacity-100'
+                        }`}
+                    >
+                        <Image
+                            fill
+                            className="object-cover"
+                            src={`${BASE_URL}${movieDetails.backdrop_path}`}
+                            alt={title}
+                            priority
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#111111]" />
                     </div>
+                )}
+
+                {/* Trailer Video - Fades in when loaded */}
+                {trailerVideo && !loadingVideos && (
+                    <div className="absolute inset-0 animate-fadeIn">
+                        <ReactPlayer
+                            width='100%'
+                            height='100%'
+                            url={`https://youtube.com/watch?v=${trailerVideo.key}`}
+                            playing
+                            volume={1}
+                            controls
+                            config={{
+                                youtube: {
+                                    playerVars: {
+                                        autoplay: 1,
+                                        modestbranding: 1,
+                                        rel: 0
+                                    }
+                                }
+                            }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#111111] pointer-events-none" />
+                    </div>
+                )}
+
+                {/* Title overlay - Always visible */}
+                <div className="absolute bottom-4 left-6 z-20">
+                    <h1 className="text-4xl sm:text-5xl font-bold text-white drop-shadow-lg">{title}</h1>
+                    {movieDetails.tagline && (
+                        <p className="text-gray-300 italic mt-1 drop-shadow-md">{movieDetails.tagline}</p>
+                    )}
+                    <p className="text-gray-400 text-sm mt-1 drop-shadow-md">
+                        {releaseDate?.substring(0, 4)}
+                        {movieDetails.runtime
+                            ? ` · ${movieDetails.runtime} min`
+                            : movieDetails.episode_run_time?.[0]
+                                ? ` · ${movieDetails.episode_run_time[0]} min/ep`
+                                : null
+                        }
+                    </p>
+                    {saved !== null && (
+                        <button
+                            onClick={toggleSave}
+                            className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-black/60 backdrop-blur-sm border border-gray-700 hover:border-[#e50914] transition cursor-pointer group">
+                            <Heart className={`h-4 w-4 ${saved ? 'text-[#e50914]' : 'text-gray-400 group-hover:text-[#e50914]'}`} fill={saved ? 'currentColor' : 'none'} />
+                            <span className={`text-sm ${saved ? 'text-[#e50914]' : 'text-gray-400 group-hover:text-white'}`}>
+                                {saved ? 'Saved' : 'My Movies'}
+                            </span>
+                        </button>
+                    )}
                 </div>
-            )}
+            </div>
 
             {/* Info Row: Poster + Rating | Genres + Overview */}
             <div className="flex flex-col xl:flex-row gap-6 px-6 mt-6 relative z-10">
@@ -227,31 +275,12 @@ export default function Film({ movieDetails, movieName, mediaType }) {
 
             {/* Soundtrack - Lazy Loaded */}
             {loadingSoundtrack ? null : soundtrackUrl ? (
-                <div className="px-6 mt-6">
+                <div className="px-6 mt-6 pb-10">
                     <div className="flex items-center gap-2 mb-2">
                         <Music className="h-4 w-4 text-[#1db954]" fill="currentColor" />
                         <span className="text-white text-xs font-semibold tracking-widest uppercase">Soundtrack</span>
                     </div>
                     <Spotify link={soundtrackUrl} />
-                </div>
-            ) : null}
-
-            {/* Trailer - Lazy Loaded */}
-            {loadingVideos ? (
-                <div className="px-6">
-                    <TrailerSkeleton />
-                </div>
-            ) : trailerVideo ? (
-                <div className="px-6 mt-10 pb-10">
-                    <div className="bg-[#1e1e1e] rounded-xl overflow-hidden border-t-2 border-[#e50914]">
-                        <div className="flex items-center gap-2 px-4 py-3">
-                            <Play className="h-5 w-5 text-[#e50914]" fill="currentColor" />
-                            <h3 className="text-white text-sm font-semibold tracking-widest uppercase">Official Trailer</h3>
-                        </div>
-                        <div className="w-full aspect-video">
-                            <ReactPlayer width='100%' height='100%' url={`https://youtube.com/watch?v=${trailerVideo.key}`} />
-                        </div>
-                    </div>
                 </div>
             ) : null}
 
