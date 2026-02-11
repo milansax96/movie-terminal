@@ -55,13 +55,27 @@ export default function Film({ movieDetails, movieName, mediaType }) {
     useEffect(() => {
         const movieId = movieDetails.id;
 
+        // Helper to safely parse JSON responses
+        const safeJsonParse = async (response) => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('JSON parse error. Response text:', text);
+                throw new Error('Invalid JSON response');
+            }
+        };
+
         // Fetch all deferred data in parallel
         Promise.all([
-            fetch(`/api/movies/${movieId}/videos?media_type=${mediaType}`).then(r => r.json()),
-            fetch(`/api/movies/${movieId}/credits?media_type=${mediaType}`).then(r => r.json()),
-            fetch(`/api/movies/${movieId}/providers?media_type=${mediaType}`).then(r => r.json()),
-            fetch(`/api/movies/${movieId}/soundtrack?name=${encodeURIComponent(movieName)}&media_type=${mediaType}`).then(r => r.json()),
-            fetch(`/api/movies/${movieId}/saved`).then(r => r.json())
+            fetch(`/api/movies/${movieId}/videos?media_type=${mediaType}`).then(safeJsonParse),
+            fetch(`/api/movies/${movieId}/credits?media_type=${mediaType}`).then(safeJsonParse),
+            fetch(`/api/movies/${movieId}/providers?media_type=${mediaType}`).then(safeJsonParse),
+            fetch(`/api/movies/${movieId}/soundtrack?name=${encodeURIComponent(movieName)}&media_type=${mediaType}`).then(safeJsonParse),
+            fetch(`/api/movies/${movieId}/saved`).then(safeJsonParse)
         ]).then(([videosData, creditsData, providersData, soundtrackData, savedData]) => {
             // Process videos
             setTrailerVideo(findTrailerVideo(videosData));

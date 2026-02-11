@@ -42,15 +42,12 @@ export default function MyMovies({ savedMovies: initialMovies }) {
                                 rounded-lg overflow-hidden border border-transparent hover:border-[#e50914] hover:shadow-lg hover:shadow-[#e50914]/20"
                             >
                                 <div
-                                    onClick={() => router.push({
-                                        pathname: '/film',
-                                        query: { id: movie.movie_id, name: movie.title, poster_path: movie.poster_path, media_type: movie.media_type }
-                                    }, `/film/${movie.movie_id}`)}
+                                    onClick={() => router.push(`/film/${movie.media_type}/${movie.movie_id}`)}
                                     className="relative aspect-video cursor-pointer"
                                 >
                                     <Image
-                                        layout="fill"
-                                        objectFit="cover"
+                                        fill
+                                        className="object-cover"
                                         src={`${BASE_URL}${movie.backdrop_path || movie.poster_path}`}
                                         alt={movie.title}
                                     />
@@ -62,10 +59,7 @@ export default function MyMovies({ savedMovies: initialMovies }) {
                                     <Heart className="h-4 w-4 text-[#e50914]" fill="currentColor" />
                                 </button>
                                 <div
-                                    onClick={() => router.push({
-                                        pathname: '/film',
-                                        query: { id: movie.movie_id, name: movie.title, poster_path: movie.poster_path, media_type: movie.media_type }
-                                    }, `/film/${movie.movie_id}`)}
+                                    onClick={() => router.push(`/film/${movie.media_type}/${movie.movie_id}`)}
                                     className="p-3 bg-[#1e1e1e] cursor-pointer"
                                 >
                                     <h2 className="text-sm text-white font-medium truncate group-hover:text-[#e50914] transition duration-200">

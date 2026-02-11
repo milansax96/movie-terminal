@@ -27,9 +27,15 @@ export async function getServerSideProps(context) {
             `https://api.themoviedb.org/3/search/movie?api_key=${process.env.API_KEY}&query=${encodeURIComponent(searchTerm)}&language=en-US`
         ).then(res => res.json());
 
+        // Add media_type to search results (search only returns movies)
+        const resultsWithType = (request.results || []).map(result => ({
+            ...result,
+            media_type: result.media_type || 'movie'
+        }));
+
         return {
             props: {
-                results: request.results || []
+                results: resultsWithType
             }
         }
     }
@@ -40,9 +46,16 @@ export async function getServerSideProps(context) {
         `https://api.themoviedb.org/3${requests[genre]?.url || requests.fetchTrending.url}`
     ).then(res => res.json());
 
+    // Add media_type to results if not present
+    // Trending endpoint already has media_type, but category endpoints (movies) don't
+    const resultsWithType = request.results.map(result => ({
+        ...result,
+        media_type: result.media_type || 'movie' // Default to 'movie' for category endpoints
+    }));
+
     return {
         props: {
-            results: request.results
+            results: resultsWithType
         }
     }
 }
